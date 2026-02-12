@@ -50,3 +50,18 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+
+# Keil Garbage
+Listings/
+Objects/
+*.lst
+*.obj
+*.m51
+*.lnp
+*.plg
+*.uvopt
+*.bak
+*.dep
+*.iex
+*.uvgui.*
