@@ -11,6 +11,7 @@ volatile unsigned char tick_1ms=0;
 unsigned char smg_code[11]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF};
 unsigned char show_buf[N];
 unsigned char show_led[N];
+unsigned char led=0xFF;
 void System_Init(void){
 	 P0=0x00; P2=0xA0; P2=0x00;
 	 P0=0xFF; P2=0x80; P2=0x00;
@@ -22,8 +23,10 @@ void Date_Init(void){
 		show_led[i]=0xFF;
 	}
 }
-void Set_led(unsigned char led){  
+void Set_led(unsigned char led){ 
+	EA=0;
 	P2=0x80; P0=led; P2=0x00;
+	EA=1;
 }
 void Nixie_scan(void){
 	static unsigned char pos=0;
@@ -40,13 +43,14 @@ void Pandan(unsigned char key_val){//不能减
 		key_val/=10;
 	}
 }
-void Update_led(){//一定得用在show_buf更新之后
+unsigned char Update_led(void){//一定得用在show_buf更新之后
 	unsigned char i=0;
 	unsigned char state_all=0xFF;
 	for(i=0;i<N;i++){
-		show_led[i]=~(0x01<<show_buf[i]);
-		state_all=state_all & show_led[i];
-	}Set_led(state_all);
+		if(show_buf[i]==0){show_led[i]=0xFF;}else{
+		show_led[i]=~(0x01<<show_buf[i]-1);
+		state_all=state_all & show_led[i];}
+	}return state_all;
 }
 unsigned char MatrixKey_scan(void){//矩阵按键扫描
 	unsigned char key_val=0;
@@ -84,7 +88,7 @@ void Key_loop(void){//消抖，按键后需要做的事
 		if(current_key!=0){
 			key_state=2;
 			Pandan(current_key);//改显示值
-			
+			led=Update_led();
 		}else{key_state=0;}
 		break;
 	case 2:
@@ -106,7 +110,7 @@ void check_s1(void){//新增按键
 		if(s1==1){state=2;
 			if(last_state==0){
 			last_state=1;
-				Update_led();}
+				Set_led(led);}
 			else{last_state=0;
 				Set_led(0xFF);}}
 		else{state=0;}
@@ -151,4 +155,9 @@ void main(){
 			check_s1();
 		}
 }
+//	while(1){
+//    if(s1) Set_led(0xFE);   // 亮L1
+//    else   Set_led(0x7F);   // 亮L8
+//}
+
 }
