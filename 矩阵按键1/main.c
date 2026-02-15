@@ -4,14 +4,26 @@
 sbit c1=P4^4;
 sbit c2=P4^2;
 sbit c3=P3^5;
-sbit c4=P3^4;
+//sbit c4=P3^4;
+sbit s1=P5^4;
 volatile bit flag_10ms=0;
 volatile unsigned char tick_1ms=0;
 unsigned char smg_code[11]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF};
-unsigned char show_buf[N]={10,10};
+unsigned char show_buf[N];
+unsigned char show_led[N];
 void System_Init(void){
 	 P0=0x00; P2=0xA0; P2=0x00;
 	 P0=0xFF; P2=0x80; P2=0x00;
+}
+void Date_Init(void){
+	unsigned char i=0;
+	for(i=0;i<N;i++){
+		show_buf[i]=10;
+		show_led[i]=0xFF;
+	}
+}
+void Set_led(unsigned char led){  
+	P2=0x80; P0=led; P2=0x00;
 }
 void Nixie_scan(void){
 	static unsigned char pos=0;
@@ -28,7 +40,15 @@ void Pandan(unsigned char key_val){//不能减
 		key_val/=10;
 	}
 }
-unsigned char MatrixKey_scan(void){
+void Update_led(){//一定得用在show_buf更新之后
+	unsigned char i=0;
+	unsigned char state_all=0xFF;
+	for(i=0;i<N;i++){
+		show_led[i]=~(0x01<<show_buf[i]);
+		state_all=state_all & show_led[i];
+	}Set_led(state_all);
+}
+unsigned char MatrixKey_scan(void){//矩阵按键扫描
 	unsigned char key_val=0;
 	P3=0xFE;
 	_nop_();
@@ -74,6 +94,30 @@ void Key_loop(void){//消抖，按键后需要做的事
 		break;
 }
 }
+void check_s1(void){//新增按键
+	static unsigned char state=0;
+	static bit last_state=0;
+	switch (state)
+{
+	case 0:
+		if(s1==1){state=1;}
+		break;
+	case 1:
+		if(s1==1){state=2;
+			if(last_state==0){
+			last_state=1;
+				Update_led();}
+			else{last_state=0;
+				Set_led(0xFF);}}
+		else{state=0;}
+		break;
+	case 2:
+		if(s1!=1){
+			state=0;
+		}
+		break;
+}
+}
 void Timer0_Isr(void) interrupt 1
 {
 	Nixie_scan();
@@ -97,12 +141,14 @@ void Timer0_Init(void)		//1毫秒@11.0592MHz
 }
 void main(){
 	System_Init();
+	Date_Init();
 	Timer0_Init();
 	show_buf[0]=0; show_buf[1]=0;
 	while(1){
 		if(flag_10ms){
 			flag_10ms=0;
 			Key_loop();
+			check_s1();
 		}
 }
 }
