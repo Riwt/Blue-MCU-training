@@ -91,11 +91,12 @@ void Key_loop(){//按键状态机
 void Lock_cod(void){//密码输入状态机
 	//状态机设计：IDLE（空闲）-> INPUT（输入中）-> CHECK（校验）-> UNLOCK（解锁）-> ALARM（报警）。
 	static unsigned char count=0;
+ static	unsigned char cod_state=0;
 	static unsigned char num=0;
 	static bit stop=0;
 	static bit is_unlock=0;
 	unsigned char i;
-	unsigned char cod_state=0;
+ 
 	switch(cod_state){
 		case 0:
 		for(i=0;i<N;i++){
