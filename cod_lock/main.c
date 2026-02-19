@@ -5,9 +5,12 @@ sbit c1=P4^4;
 sbit c2=P4^2;
 sbit c3=P3^5;
 //sbit c4=P3^4;
+unsigned char key_msg = 0;   // 邮箱：0代表没有新按键，非0代表有新按键到来
+unsigned char input_count = 0;// 输入计数器
 unsigned char tick_1ms=0;
 volatile bit flag_10ms=0;
 //volatile bit flag_200ms=0;
+unsigned char code led_bounce[] = {0xFE, 0xFD, 0xFB, 0xF7, 0xEF, 0xDF, 0xBF, 0x7F, 0xBF, 0xDF, 0xEF, 0xF7, 0xFB, 0xFD};
 unsigned char smg_code[12]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF,0xBF};
 unsigned char show_buf[N]={10,10,10,10};
 unsigned char set_cod[N]={0,0,0,0};
@@ -36,23 +39,30 @@ void Nixie_scan(void){
 	if(pos>=N){pos=0;}
 }
 void relay_on(void){
-	static bit is_on=0;
-	P2=0xA0;
-	if(is_on==0){P0=0x10; is_on=1;} else {P0=0x00; is_on=0;}
-	P2=0x00;
+	EA=0;
+	P2=0xA0; P0=0x10; P2=0x00;
+	EA=1;
+}
+void relay_off(void){
+	EA=0;
+	P2=0xA0; P0=0x00; P2=0x00;
+	EA=1;
 }
 void alarm_on(void){
-	static bit is_on=0;
-	P2=0xA0;
-	if(is_on==0){P0=0x20; is_on=1;} else {P0=0x00; is_on=0;}
-	P2=0x00;}
-void Update_buf(unsigned char cod){   //待修改!!!
-	static unsigned char i=0;
-	if(cod<1 || cod>10) return;
-		show_buf[i]=cod;
-		i++;
-		if(i>=N) i=0;
-}
+	EA=0;
+	P2=0xA0; P0=0x40; P2=0x00;
+	EA=1;}
+void alarm_off(void){
+	EA=0;
+	P2=0xA0; P0=0x00; P2=0x00;
+	EA=1;}
+// void Update_buf(unsigned char cod){   //待修改!!!
+// 	static unsigned char i=0;
+// 	if(cod<1 || cod>10) return;
+// 		show_buf[i]=cod;
+// 		i++;
+// 		if(i>=N) i=0;
+// }
 unsigned char Matrixkey_scan(void){
 	unsigned char key_val=0;
 	P3=0xFE; _nop_();
@@ -80,7 +90,7 @@ void Key_loop(){//按键状态机
 	case 1:
 		if(cod){
 			key_state=2;
-			Update_buf(cod); }//没写完,更新数字
+			key_msg = cod; }//没写完,更新数字
 		else key_state=0;
 		break;
 	case 2:
@@ -89,63 +99,89 @@ void Key_loop(){//按键状态机
 		break;
 }}
 void Lock_cod(void){//密码输入状态机
+     // 【关键动作】：看完消息必须清空邮箱，防止重复处理！
 	//状态机设计：IDLE（空闲）-> INPUT（输入中）-> CHECK（校验）-> UNLOCK（解锁）-> ALARM（报警）。
 	static unsigned char count=0;
- static	unsigned char cod_state=0;
+    static unsigned char cod_state=0;
 	static unsigned char num=0;
-	static bit stop=0;
-	static bit is_unlock=0;
+	static bit is_password_set=0;
+//	static unsigned char stop=0;
+	unsigned char current_key=0; // 把按键拿出来
 	unsigned char i;
- 
 	switch(cod_state){
 		case 0:
-		for(i=0;i<N;i++){
-			if(show_buf[i]!=11){
-				cod_state=1; break;}
-			}
+		if (key_msg == 0) return;
+		current_key=key_msg;
+		key_msg = 0;
+		input_count=0;
+		show_buf[input_count]=current_key;
+		input_count++;
+		cod_state=1;
 	break;	
 		case 1:
-		for(i=0;i<N;i++){
-			if(show_buf[i]==11)
-			break;}
-			if(i==N){if(is_unlock){
-				cod_state=2;}
-				else{ 
-					cod_state=0; is_unlock=1;
-					i=0;
-					while(i<N){
-						set_cod[i]=show_buf[i];
-					i++;}
-					Date_Init(show_buf,11);}
+		if (key_msg == 0) return;
+		current_key=key_msg;
+		key_msg = 0;
+			show_buf[input_count]=current_key;
+			input_count++;
+		if(input_count>=N){
+			input_count=0;
+			cod_state=2;
 		}
 			break;
 		case 2:
+			num++;
+		if(is_password_set==0){
+			if(num==1){
+			for(i=0;i<N;i++){
+				set_cod[i]=show_buf[i];
+			}}
+			if(num>=100){
+			is_password_set=1;
+			cod_state=0; num=0;
+			Date_Init(show_buf,11);}
+		}else{
+			num=0;
 		for(i=0;i<N;i++){
 			if(show_buf[i]!=set_cod[i]) break;
 		}if(i==N) cod_state=3;
-		else cod_state=4;
+		else cod_state=4;}
 		break;
 		case 3:
-		relay_on(); //解锁
-		Set_led(~(0x01<<count));//亮流水灯，保持一段时间后熄灭
+		if(count==0&&num==0){
+			relay_on();
+		}
 		num++;
-		if(num>=20){
+		if(num>=5){
 			num=0;
+			Set_led(led_bounce[count % 14]);
 			count++;
 		}
-		if(count>=N) {count=0;
-			if(stop) {stop=0; Set_led(0xFF); cod_state=0; relay_on();}
-			else
-			stop=1;}
+		if(count>=28) {count=0;
+			relay_off();
+			Set_led(0xFF);
+			cod_state=0;
+			Date_Init(show_buf,11);
+			}
 		break;
 		case 4:
-		alarm_on();  Set_led(0x00); 
 		num++;
-		if(num>=10){
-			if(stop==0){ alarm_on(); stop=1; }
-			num=0; count++;}
-		if(count>=10){
+		
+		if(num>=20){
+			num=0;
+			if(count%2==0){
+				Set_led(0x00);
+				alarm_on();
+			 }else{
+				Set_led(0xFF);
+				alarm_off();
+			 }
+			count++;
+		}
+		if(count>=6) {
 			Set_led(0xFF);
+			alarm_off();
+			Date_Init(show_buf,11);
 			count=0; cod_state=0;
 			}
 		break;
