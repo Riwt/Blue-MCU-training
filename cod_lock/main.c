@@ -38,24 +38,13 @@ void Nixie_scan(void){
 	pos++;
 	if(pos>=N){pos=0;}
 }
-void relay_on(void){
-	EA=0;
-	P2=0xA0; P0=0x10; P2=0x00;
-	EA=1;
+void Write_573(unsigned char channel, unsigned char dat) {
+    EA = 0; 
+    P0 = dat; 
+    P2 = (P2 & 0x1F) | (channel << 5); 
+    P2 &= 0x1F; 
+    EA = 1;
 }
-void relay_off(void){
-	EA=0;
-	P2=0xA0; P0=0x00; P2=0x00;
-	EA=1;
-}
-void alarm_on(void){
-	EA=0;
-	P2=0xA0; P0=0x40; P2=0x00;
-	EA=1;}
-void alarm_off(void){
-	EA=0;
-	P2=0xA0; P0=0x00; P2=0x00;
-	EA=1;}
 // void Update_buf(unsigned char cod){   //待修改!!!
 // 	static unsigned char i=0;
 // 	if(cod<1 || cod>10) return;
@@ -99,7 +88,7 @@ void Key_loop(){//按键状态机
 		break;
 }}
 void Lock_cod(void){//密码输入状态机
-     // 【关键动作】：看完消息必须清空邮箱，防止重复处理！
+     // 看完消息必须清空邮箱，防止重复处理！
 	//状态机设计：IDLE（空闲）-> INPUT（输入中）-> CHECK（校验）-> UNLOCK（解锁）-> ALARM（报警）。
 	static unsigned char count=0;
     static unsigned char cod_state=0;
@@ -110,6 +99,7 @@ void Lock_cod(void){//密码输入状态机
 	unsigned char i;
 	switch(cod_state){
 		case 0:
+		Date_Init(show_buf,11);
 		if (key_msg == 0) return;
 		current_key=key_msg;
 		key_msg = 0;
@@ -148,40 +138,39 @@ void Lock_cod(void){//密码输入状态机
 		else cod_state=4;}
 		break;
 		case 3:
+		Date_Init(show_buf,10);
 		if(count==0&&num==0){
-			relay_on();
+			Write_573(5,0x10); // 通道5为继电器
 		}
 		num++;
-		if(num>=5){
+		if(num>=10){
 			num=0;
 			Set_led(led_bounce[count % 14]);
 			count++;
 		}
 		if(count>=28) {count=0;
-			relay_off();
+			Write_573(5,0x00); // 通道5为继电器
 			Set_led(0xFF);
 			cod_state=0;
-			Date_Init(show_buf,11);
 			}
 		break;
 		case 4:
+		Date_Init(show_buf,10);
 		num++;
-		
 		if(num>=20){
 			num=0;
 			if(count%2==0){
 				Set_led(0x00);
-				alarm_on();
+				Write_573(5,0x40); // 通道5为蜂鸣器
 			 }else{
 				Set_led(0xFF);
-				alarm_off();
+				Write_573(5,0x00); // 通道5为蜂鸣器
 			 }
 			count++;
 		}
 		if(count>=6) {
 			Set_led(0xFF);
-			alarm_off();
-			Date_Init(show_buf,11);
+			Write_573(5,0x00); // 通道5为蜂鸣器
 			count=0; cod_state=0;
 			}
 		break;
