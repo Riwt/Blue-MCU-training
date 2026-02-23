@@ -1,0 +1,46 @@
+#include <STC15F2K60S2.H>
+sbit s4=P3^3;//启动和暂停
+sbit s5=P3^2;//清零
+unsigned char smg_code[12]={0xC0,0xF9,0x94,0xB0,0x99,0x92,0x84,0xF8,0x80,0x90,0xFF,0xB0};
+unsigned char show_buf[8]={0,0,11,0,0,11,0,0};
+void System_Init(void){
+	P2=0xA0; P0=0x00; P2=0x00;
+	P2=0x80; P0=0xFF; P2=0x00;
+}
+void Nixie(void){
+	unsigned char pos=0;
+	P0=0xFF; P2=0xE0; P2=0x00;
+	P0=0x01<<pos; P2=0xA0; P2=0x00;
+	P0=smg_code[show_buf[pos]];
+	P2=0xE0; P2=0x00; pos++;
+	if(pos>7){pos=0;}
+}
+unsigned char Btn_Read(void){
+    if(s4==0) return 4;
+    if(s5==0) return 5;
+}
+void Btn_loop(void){
+    unsigned char btn_val=0;
+    static unsigned char btn_state=0;
+}
+void Timer0_Isr(void) interrupt 1
+{
+}
+
+void Timer0_Init(void)		//1毫秒@11.0592MHz
+{
+	AUXR |= 0x80;			//定时器时钟1T模式
+	TMOD &= 0xF0;			//设置定时器模式
+	TL0 = 0xCD;				//设置定时初始值
+	TH0 = 0xD4;				//设置定时初始值
+	TF0 = 0;				//清除TF0标志
+	TR0 = 1;				//定时器0开始计时
+	ET0 = 1;				//使能定时器0中断
+}
+void main(){
+	System_Init();
+	Timer0_Init();
+	while(1){
+	
+}
+}
