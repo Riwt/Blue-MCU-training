@@ -9,12 +9,13 @@ unsigned char btn_what=0;
 unsigned char watch_mode=0; 
 unsigned char smg_code[12]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF,0xBF};
 unsigned char show_buf[8]={0,0,11,0,0,11,0,0};
-volatile unsigned char min=0;
-volatile unsigned char sec=0;
-volatile unsigned char tick_50ms=0;
-volatile unsigned char ms_50=0;
+volatile char min=0;
+volatile char sec=0;
+volatile char tick_50ms=0;
+volatile char ms_50=0;
 volatile bit is_run=0;
 volatile bit is_watch_run=0;
+volatile bit is_alarm=0;
 void System_Init(void){
 	P2=0xA0; P0=0x00; P2=0x00;
 	P2=0x80; P0=0xFF; P2=0x00;
@@ -26,6 +27,14 @@ void Nixie_scan(void){
 	P0=smg_code[show_buf[pos]];
 	P2=0xE0; P2=0x00; pos++;
 	if(pos>7){pos=0;}
+}
+void Set_Buzzer_Relay(volatile bit i){
+	EA=0;
+	P2=0xA0;
+	if(i==0) P0=0x00;
+	else P0=0x50;
+	P2=0x00;
+	EA=1;
 }
 unsigned char Btn_Read(void){
 	P44=0;
@@ -96,12 +105,15 @@ void Stopwatch(void){ //秒表
 		break;
 	case 7:
 		watch_mode=!watch_mode;
-		is_run=0; is_watch_run=0;
+		is_run=0; is_watch_run=0; is_show=1;
 		Clear_watch(); Update_show();
 		break;
 }	btn_what=0;
 }
 void Time_watch(){//定时器模式
+	if(is_watch_run==0){
+		Set_Buzzer_Relay(is_alarm);
+	}
 	if(btn_what==0) return ;
 	switch (btn_what)
 {	
@@ -121,8 +133,32 @@ void Time_watch(){//定时器模式
 		break;
 }	btn_what=0;
 }
-void Display_date_time(void){
-	
+void Display_date_time(void){//定时器
+	if(is_watch_run==0) return ;
+	ms_50--;
+	if(ms_50<=0){
+		ms_50=50;
+		if (min == 0 && sec == 0 && tick_50ms == 0) {
+            is_watch_run = 0; 
+            is_alarm = 1;    
+        } 
+        else {
+            if (tick_50ms == 0) {
+                tick_50ms = 19;
+                if (sec == 0) {
+                    sec = 59;  
+                    if (min > 0) {
+                        min--;
+                    }
+                } else {
+                    sec--;     
+                }
+            } else {
+                tick_50ms--;   
+            }
+        } 
+        Update_show(); 
+    }
 }
 void Display_date_watch(void){ //秒表用的
 	if(is_run==0) return ;
@@ -160,6 +196,7 @@ void Timer0_Init(void)		//1毫秒@11.0592MHz
 	EA=1;
 }
 void main(){
+	static unsigned char count=0;
 	System_Init();
 	Timer0_Init();
 	while(1){
@@ -169,6 +206,11 @@ void main(){
 			if(watch_mode==0)
 			Stopwatch();
 				else{
-			Time_watch();}}
+			if(is_alarm) count++;
+		if(count>=200){
+			count=0; is_alarm=0;
+		}
+			Time_watch();}
+			}
 }
 }
