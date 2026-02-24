@@ -1,9 +1,12 @@
 #include <STC15F2K60S2.H>
 sbit s4=P3^3;//启动和暂停
 sbit s5=P3^2;//清零
+sbit s6=P3^1;//暂停显示
+sbit s7=P3^0;//切换定时器
 volatile unsigned char tick_1ms=0;
 volatile unsigned char flag_10ms=0;
 unsigned char btn_what=0;
+unsigned char watch_mode=0; 
 unsigned char smg_code[12]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF,0xBF};
 unsigned char show_buf[8]={0,0,11,0,0,11,0,0};
 volatile unsigned char min=0;
@@ -11,6 +14,7 @@ volatile unsigned char sec=0;
 volatile unsigned char tick_50ms=0;
 volatile unsigned char ms_50=0;
 volatile bit is_run=0;
+volatile bit is_watch_run=0;
 void System_Init(void){
 	P2=0xA0; P0=0x00; P2=0x00;
 	P2=0x80; P0=0xFF; P2=0x00;
@@ -27,6 +31,8 @@ unsigned char Btn_Read(void){
 	P44=0;
     if(s4==0){ P44=1; return 4;}
     if(s5==0){ P44=1; return 5;}
+	if(s6==0){ P44=1; return 6;}
+	if(s7==0){ P44=1; return 7;}
 	return 0;
 }
 void Btn_loop(void){
@@ -39,11 +45,8 @@ void Btn_loop(void){
 		break;
 		case 1:
 		if(btn_val!=0){
-			if(btn_val==4){
-				btn_what=4; btn_state=2;
-			}else if(btn_val==5){
-				btn_what=5;
-				btn_state=2;}
+				btn_what=btn_val;
+				btn_state=2;
 		}else btn_state=0;
 		break;
 		case 2:
@@ -64,7 +67,17 @@ void Update_show(void){//更新
 	show_buf[6]=tick_50ms/10;
 	show_buf[7]=tick_50ms%10;
 }
-void Stopwatch(void){
+void Update_time(void){ //更新定时器
+	if(sec>=61){
+		min++; sec=0;}
+	if(min>=101){
+		min=0;}
+	Update_show();
+}
+void Stopwatch(void){ //秒表
+	static bit is_show=1;
+	if(is_show){
+	Update_show();}
 	if(btn_what==0) return ;
 	switch (btn_what)
 {
@@ -77,17 +90,43 @@ void Stopwatch(void){
 		is_run=!is_run;
 		Update_show();
 		break;
+	case 6:
+		if(is_run==0&&is_show==1) is_show=0;
+		else is_show=!is_show;
+		break;
+	case 7:
+		watch_mode=!watch_mode;
+		is_run=0; is_watch_run=0;
+		Clear_watch(); Update_show();
+		break;
 }	btn_what=0;
 }
-void Timer0_Isr(void) interrupt 1
+void Time_watch(){//定时器模式
+	if(btn_what==0) return ;
+	switch (btn_what)
 {	
-	Nixie_scan();
-	tick_1ms++;
-	if(tick_1ms>=10){
-		flag_10ms=1;
-		tick_1ms=0;}
+	case 4:
+		is_watch_run=!is_watch_run;
+		break;
+	case 5:
+		min++; Update_time();
+		break;
+	case 6:
+		sec++; Update_time();
+		break;
+	case 7:
+		watch_mode=!watch_mode;
+		is_run=0; is_watch_run=0;
+		Clear_watch(); Update_show();
+		break;
+}	btn_what=0;
+}
+void Display_date_time(void){
+	
+}
+void Display_date_watch(void){ //秒表用的
 	if(is_run==0) return ;
-		ms_50++;
+	ms_50++;
 		if(ms_50>=50){
 			ms_50=0;
 		tick_50ms++;}
@@ -96,7 +135,18 @@ void Timer0_Isr(void) interrupt 1
 		if(sec>=60){
 			min++; sec=0;
 			if(min>=100) min=0;}}
-	Update_show();
+}
+void Timer0_Isr(void) interrupt 1
+{	
+	Nixie_scan();
+	tick_1ms++;
+	if(tick_1ms>=10){
+		flag_10ms=1;
+		tick_1ms=0;}
+	if(watch_mode)
+		Display_date_time();
+	else
+		Display_date_watch();
 }
 void Timer0_Init(void)		//1毫秒@11.0592MHz
 {
@@ -116,6 +166,9 @@ void main(){
 		if(flag_10ms){
 			flag_10ms=0;
 			Btn_loop();
-			Stopwatch();}
+			if(watch_mode==0)
+			Stopwatch();
+				else{
+			Time_watch();}}
 }
 }
