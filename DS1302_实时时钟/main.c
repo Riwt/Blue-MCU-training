@@ -1,16 +1,24 @@
 #include <STC15F2K60S2.H>
+#include <intrins.h>
 #include "ds1302.h"
 #include "onewire.h"
 sbit c1=P4^4;
 sbit c2=P4^2;
 sbit c3=P3^5;
 //sbit c4=P3^4;
+sbit DQ=P1^4;
 
 unsigned char System_mode=0;
 unsigned char is_neg=0;//标记温度负数
 unsigned int temperature=0;
-unsigned char time_temp_mode=0;
+unsigned char time_temp_mode=0;//mode2
 unsigned char key_what=0;//邮箱
+unsigned char stat_led=0xFF;//-----------led状态---------
+unsigned char command=0;//--串口接收--
+
+volatile unsigned char sec=0;//记录系统运行时间
+volatile unsigned char min=0;
+volatile unsigned char hour=0;
 
 unsigned char tick_1ms=0;
 volatile bit flag_10ms=0;
@@ -22,6 +30,16 @@ unsigned char show_buf[8]={10,10,10,10,10,10,10,10};
 void System_Init(void){
 	P2=0xA0; P0=0x00; P2=0x00;
 	P2=0x80; P0=0xFF; P2=0x00;
+}
+void Date_Init(unsigned char *str,unsigned char a){
+	unsigned char i=0;
+	for(i=0;i<8;i++){
+			str[i]=a;}
+}
+void Set_led(unsigned char s){//记录led状态
+	EA=0;
+	P2=0x80; P0=s; stat_led=P0; P2=0x00;
+	EA=1;
 }
 void Nixie_scan(void){//可显示小数
 	static unsigned char pos=0;
@@ -59,7 +77,7 @@ void Keep_loop(void){
 	unsigned char key_val=0;
 	key_val=MatrixKey_scan();
 	switch (key_state)
-{
+	{
 	case 0:
 		if(key_val!=0) key_state=1;
 		break;
@@ -72,7 +90,7 @@ void Keep_loop(void){
 	case 2:
 		if(key_val==0) key_state=0;
 		break;
-}
+	}
 }
 void Timer0_Isr(void) interrupt 1
 {
@@ -92,6 +110,63 @@ void Timer0_Init(void)		//1毫秒@11.0592MHz
 	TR0 = 1;				//定时器0开始计时
 	ET0 = 1;				//使能定时器0中断
 	EA=1;
+}
+void Uart1_Isr(void) interrupt 4
+{
+	if (RI)				//检测串口1接收中断
+	{
+		RI = 0;			//清除串口1接收中断请求位
+		command=SBUF;
+	}
+}
+void Uart1_Init(void)	//9600bps@11.0592MHz
+{
+	PCON &= 0x7F;		//波特率不倍速
+	SCON = 0x50;		//8位数据,可变波特率
+	AUXR |= 0x40;		//定时器时钟1T模式
+	AUXR &= 0xFE;		//串口1选择定时器1为波特率发生器
+	TMOD &= 0x0F;		//设置定时器模式
+	TMOD |= 0x20;		//设置定时器模式
+	TL1 = 0xDC;			//设置定时初始值
+	TH1 = 0xDC;			//设置定时重载值
+	ET1 = 0;			//禁止定时器中断
+	TR1 = 1;			//定时器1开始计时
+	ES = 1;				//使能串口1中断
+	EA=1;
+}
+void SendByte(unsigned char dat){//---串口查询发送----
+	ES=0;
+	SBUF=dat;
+	while(TI==0);
+	TI=0;
+	ES=1;
+}
+void SendString(unsigned char *str){
+	while(*str!='\0')
+		SendByte(*str++);
+}
+void Update_show_time(unsigned char _hour,unsigned char _min,unsigned char _sec){//----mode1,2,3
+    show_buf[0]=_hour/10; show_buf[1]=_hour%10;
+    show_buf[2]=12;
+    show_buf[3]=_min/10; show_buf[4]=_min%10;
+    show_buf[5]=12;
+    show_buf[6]=_sec/10; show_buf[7]=_sec%10;
+}
+void Time_Calc(void){//all_time
+    static unsigned char ms_10=0;
+     ms_10++;
+    if(ms_10>=100){
+        ms_10=0; sec++;
+        if(sec>=60){
+            sec=0; min++;
+            if(min>=60){
+                min=0; hour++;
+                if(hour>=24){
+                    hour=0;
+                }
+            }
+        } 
+    }
 }
 void Diplay_show_month(void){
 	show_buf[0]=Time[6]/16; show_buf[1]=Time[6]%16;
@@ -136,39 +211,144 @@ void Read_Ds1302_Time(void){
 	EA=1;
 }
 unsigned int Read_DS18B20_temp(void){
-	unsigned char LSB,MSB;
-	unsigned int temp;
-	EA=0;
-	init_ds18b20();
-	Write_DS18B20(0xCC);
-	Write_DS18B20(0xBE);//----先取后放----
-	LSB = Read_DS18B20();
-    MSB = Read_DS18B20();BE
-	EA=1;
-	
-	EA=0;
-	init_ds18b20();
-	Write_DS18B20(0xCC);
-	Write_DS18B20(0x44);
-	EA=1;B
-	
-	temp=(MSB<<8)|LSB;
-	if((temp&0xF800)!=0){
-		is_neg=1;
-		temp=~temp+1;}
-	else is_neg=0;
-	temp=(temp*625)/100;
-	return temp;
+    unsigned char LSB,MSB;
+    signed int raw;
+    unsigned int temp;
+	//		static unsigned char is_read=0;
+	//		if(is_read==0){
+	//		is_read=1;
+	//		EA=0;
+	//    if(init_ds18b20()){ EA=1; is_neg=0; return 0; }
+			init_ds18b20();
+		Write_DS18B20(0xCC);
+		Write_DS18B20(0xBE);
+		LSB = Read_DS18B20();
+		MSB = Read_DS18B20();
+	//    EA=1;
+	//}
+	//		else if(is_read){
+	//		is_read=0;
+	//    EA=0;
+	//    if(init_ds18b20()){ EA=1; is_neg=0; return 0; }
+			init_ds18b20();
+		Write_DS18B20(0xCC);
+		Write_DS18B20(0x44);
+	//    EA=1;
+	//}
+    raw = (signed int)((MSB<<8)|LSB);
+   if(raw < 0){ is_neg=1; raw=-raw; }
+    else       { is_neg=0; }
+
+    temp = (unsigned int)(raw * 625L / 100);
+    return temp;
 }
-void Time_temp_mode2(void){
+void Time_Read(void){//-----mode1--时间读取-----串口-------看一下这个，你可能会忘-----
+	SendByte((hour/10<<4)|(hour%10));
+	SendByte((min/10<<4)|(min%10));
+	SendByte((sec/10<<4)|(sec%10));
+}
+//
+//-------------------------------状态机---------------------------------
+//
+void Device_test(void){  //200ms,开始与停止条件未加------- mode 0 --------
+	static unsigned char pos=0;
+    static unsigned char ms_10=0;
+	static bit justic=0;
+	static bit is_select=0;
+    if(ms_10<10){ms_10++; return ;}
+	ms_10=0;
+	if(is_select==0){  //检查led
+	if(justic==0){
+		Set_led(0xFE<<pos);
+	}else{
+		Set_led(~(0xFE<<pos));
+		}pos++;
+	if(pos>7){
+		if(justic==1)
+			is_select=1;
+		pos=0; justic=!justic;}}
+	else{             //检测数码管
+		if(justic==0) show_buf[pos]=11;
+		else show_buf[pos]=10;
+		pos++;
+	if(pos>7){
+		if(justic==1){is_select=0;
+		System_mode=1;//重置暂时，
+			}
+		pos=0; justic=!justic;}}
+}
+void Mode1_factory_led(void){//mode1----状态机-----
+//	static unsigned char stat_led=0xFF;//在set_led中更新
+	static bit s5=0;//注意return是3！！！
+	static bit s4=0;//4
+	static bit s6=0;//2
+	static bit s7=0;//1
+	
+	if(key_what>6||key_what<=0) return ;
+	switch(key_what){//---------本地控制---------
+		case 4:
+		if(s4){s4=!s4; Set_led(stat_led|0x80);}
+		else{s4=!s4; Set_led(stat_led&0x7F);} 	key_what=0;
+		break;	
+		case 3:
+		if(s5){s5=!s5; Set_led(stat_led|0x40);}
+		else{s5=!s5; Set_led(stat_led&0xBF);}		key_what=0;
+		break;
+		case 2:
+		if(s6){s6=!s6; Set_led(stat_led|0x20);}
+		else{s6=!s6; Set_led(stat_led&0xDF);}  key_what=0;
+		break;	
+		case 1:
+		if(s7){s7=!s7; Set_led(stat_led|0x10);}
+		else{s7=!s7; Set_led(stat_led&0xEF);} 	key_what=0;
+		break;
+		case 5:
+		Date_Init(show_buf,10);
+		Set_led(0xFF);	s4=s5=s6=s7=0;
+		System_mode=2;  key_what=0;
+		break;
+		case 6:
+		Date_Init(show_buf,10);
+		Set_led(0xFF);  s4=s5=s6=s7=0;
+		System_mode=0;//--------暂时-----------
+		key_what=0;
+		break;
+	}	
+}
+void Send_temp(void){
+	if(is_neg) SendByte('-');
+	else SendByte('+');
+	SendByte(temperature/1000+'0');
+	SendByte(temperature/100%10+'0');
+	SendByte('-');
+	SendByte(temperature/10%10+'0');
+	SendByte(temperature%10+'0');
+	SendByte('\r');
+	SendByte('\n');
+}
+void Cort_connect(){
+	if(command==0) return ;
+	switch(command&0xF0){//---------远程控制-------
+		case 0xA0:
+		Set_led((stat_led&0xF0)|(~command)&0x0F);
+		break;
+		case 0xB0:
+		Time_Read();
+		break;
+		case 0xC0:
+		Send_temp();
+		break;
+	}command=0;
+}
+void Time_temp_mode2(void){//10ms------mode2----------
 	static unsigned char mode=2;
-	static unsigned char ms_10=0;
 	if(key_what<=4&&key_what>=1){
 		mode=key_what;}
-	key_what=0;
+		key_what=0;
 	switch (mode)
-{
+	{
 	case 1:
+		mode=2;
 		System_mode=1;
 		break;
 	case 2:
@@ -180,37 +360,43 @@ void Time_temp_mode2(void){
 		Diplay_show_month();
 		break;
 	case 4:
-		ms_10++;
-		if(ms_10>=50){
-			ms_10=0;
-			temperature=Read_DS18B20_temp();
-		}	Display_show_temp();
+		Display_show_temp();
 		break;
+	}
 }
+void System_Match(){//------模式匹配--------
+	switch (System_mode)
+	{
+	case 0:
+    Device_test();
+		break;
+	case 1:
+	Update_show_time(hour,min,sec);
+	Mode1_factory_led();
+		break;
+	case 2:
+		Time_temp_mode2();
+		break;
+	}
 }
-//void System_Match(){//------模式匹配--------
-//	switch (System_mode)
-//	{
-//	case 0:
-//    Device_test();
-//		break;
-//	case 1:
-//	Update_show_time(hour,min,sec);
-//	Mode1_factory_led();
-//		break;
-//	case 2:
-//		break;
-//	}
-//}
 void main(){
+	static unsigned char ms_10=0;
 	System_Init();
 	Ds1302_Config();
 	Timer0_Init();
+	Uart1_Init();
+	SendString("Welcome to mutilfunction system!");
 	while(1){
 		if(flag_10ms){
 			flag_10ms=0;
 			Keep_loop();
-			Time_temp_mode2();
+			Time_Calc();
+			ms_10++;
+			if(ms_10>=80){
+			ms_10=0;
+			temperature=Read_DS18B20_temp();
+		}	Cort_connect();
+			System_Match();
 		}
-}
+	}
 }
