@@ -319,6 +319,12 @@ void Send_temp(void){
 	if(is_neg) SendByte('-');
 	else SendByte('+');
 	SendByte(temperature/1000+'0');
+	SendByte(temperature/100%10+'0');
+	SendByte('-');
+	SendByte(temperature/10%10+'0');
+	SendByte(temperature%10+'0');
+	SendByte('\r');
+	SendByte('\n');
 }
 void Cort_connect(){
 	if(command==0) return ;
@@ -330,6 +336,7 @@ void Cort_connect(){
 		Time_Read();
 		break;
 		case 0xC0:
+		Send_temp();
 		break;
 	}command=0;
 }
@@ -378,7 +385,7 @@ void main(){
 	Ds1302_Config();
 	Timer0_Init();
 	Uart1_Init();
-	
+	SendString("Welcome to mutilfunction system!");
 	while(1){
 		if(flag_10ms){
 			flag_10ms=0;
