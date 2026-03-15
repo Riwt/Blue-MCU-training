@@ -378,6 +378,11 @@
               <FileType>1</FileType>
               <FilePath>.\onewire.c</FilePath>
             </File>
+            <File>
+              <FileName>iic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\iic.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>

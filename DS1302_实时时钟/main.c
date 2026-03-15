@@ -2,6 +2,7 @@
 #include <intrins.h>
 #include "ds1302.h"
 #include "onewire.h"
+#include "iic.h"
 sbit c1=P4^4;
 sbit c2=P4^2;
 sbit c3=P3^5;
@@ -15,6 +16,7 @@ unsigned char time_temp_mode=0;//mode2
 unsigned char key_what=0;//邮箱
 unsigned char stat_led=0xFF;//-----------led状态---------
 unsigned char command=0;//--串口接收--
+unsigned char temp_limit = 30; //----默认温度报警阈值为 30 度mode2.5----
 
 volatile unsigned char sec=0;//记录系统运行时间
 volatile unsigned char min=0;
@@ -36,9 +38,31 @@ void Date_Init(unsigned char *str,unsigned char a){
 	for(i=0;i<8;i++){
 			str[i]=a;}
 }
+void Temp_limit_Init(void){
+	EA=0;
+	temp_limit=Read_EEPROM(0x05);
+	EA=1;
+	if(temp_limit>99){
+		temp_limit=30;
+		EA=0;
+		Write_EEPROM(0x05,temp_limit);
+		Delay5ms();
+		EA=1;
+	}
+}
 void Set_led(unsigned char s){//记录led状态
 	EA=0;
 	P2=0x80; P0=s; stat_led=P0; P2=0x00;
+	EA=1;
+}
+void Set_Buzz(){
+	EA=0;
+	P2=0xA0; P0=0x40; P2=0x00;
+	EA=1;
+}
+void Off_Buzz(void){
+	EA=0;
+	P2=0xA0; P0=0x00; P2=0x00;
 	EA=1;
 }
 void Nixie_scan(void){//可显示小数
@@ -118,6 +142,10 @@ void Uart1_Isr(void) interrupt 4
 		RI = 0;			//清除串口1接收中断请求位
 		command=SBUF;
 	}
+	if (TI) // 终极防卡死护城河
+	{
+		TI = 0; 
+	}
 }
 void Uart1_Init(void)	//9600bps@11.0592MHz
 {
@@ -183,6 +211,8 @@ void Diplay_show_Time(void){
 	show_buf[6]=Time[0]/16; show_buf[7]=Time[0]%16;
 }
 void Display_show_temp(void){
+	unsigned int disp_temp = temperature;
+	if(disp_temp > 9999) disp_temp = 9999;
 	show_buf[0]=10;
     show_buf[1]=10;
     show_buf[2]=10;
@@ -190,10 +220,16 @@ void Display_show_temp(void){
 	show_buf[3]=12;}
 	else{
 	show_buf[3]=10;}
-	show_buf[4]=temperature/1000;
-	show_buf[5]=temperature/100%10+20;
-	show_buf[6]=temperature/10%10;
-	show_buf[7]=temperature%10;
+	show_buf[4]=disp_temp/1000;
+	show_buf[5]=disp_temp/100%10+20;
+	show_buf[6]=disp_temp/10%10;
+	show_buf[7]=disp_temp%10;
+}
+void Display_show_temp_limit(unsigned char s){
+	show_buf[0]=s/10; show_buf[1]=s%10;
+	show_buf[2]=10;	show_buf[3]=10;
+	show_buf[4]=10;	show_buf[5]=10;
+	show_buf[6]=10;	show_buf[7]=10;
 }
 void Ds1302_Config(void){
 	char i;
@@ -210,11 +246,21 @@ void Read_Ds1302_Time(void){
 	Time[i]=Read_Ds1302_Byte(Read_Ds1302_adrr[i]);}//abc码存储
 	EA=1;
 }
-
 void Time_Read(void){//-----mode1--时间读取-----串口-------看一下这个，你可能会忘-----
 	SendByte((hour/10<<4)|(hour%10));
 	SendByte((min/10<<4)|(min%10));
 	SendByte((sec/10<<4)|(sec%10));
+}
+void Send_temp(void){
+	if(is_neg) SendByte('-');
+	else SendByte('+');
+	SendByte(temperature/1000+'0');
+	SendByte(temperature/100%10+'0');
+	SendByte('.');
+	SendByte(temperature/10%10+'0');
+	SendByte(temperature%10+'0');
+	SendByte('\r');
+	SendByte('\n');
 }
 //
 //-------------------------------状态机---------------------------------
@@ -284,17 +330,6 @@ void Mode1_factory_led(void){//mode1----状态机-----
 		break;
 	}	
 }
-void Send_temp(void){
-	if(is_neg) SendByte('-');
-	else SendByte('+');
-	SendByte(temperature/1000+'0');
-	SendByte(temperature/100%10+'0');
-	SendByte('-');
-	SendByte(temperature/10%10+'0');
-	SendByte(temperature%10+'0');
-	SendByte('\r');
-	SendByte('\n');
-}
 void Cort_connect(){
 	if(command==0) return ;
 	switch(command&0xF0){//---------远程控制-------
@@ -311,9 +346,13 @@ void Cort_connect(){
 }
 void Time_temp_mode2(void){//10ms------mode2----------
 	static unsigned char mode=2;
-	if(key_what<=4&&key_what>=1){
-		mode=key_what;}
-		key_what=0;
+	static unsigned char temp_set=0;
+	if(key_what<=5&&key_what>=1){
+		if(mode!=5){
+		mode=key_what;
+		if(mode==5)
+		temp_set=temp_limit;
+		key_what=0;}}
 	switch (mode)
 	{
 	case 1:
@@ -331,7 +370,43 @@ void Time_temp_mode2(void){//10ms------mode2----------
 	case 4:
 		Display_show_temp();
 		break;
+	case 5:{
+		switch(key_what){
+			case 1:
+				temp_limit=temp_set;
+				EA=0;
+				Write_EEPROM(0x05, temp_limit);
+				Delay5ms();
+				EA=1;
+				show_buf[1]=0; show_buf[0]=0;
+				mode=4;
+				break;
+			case 2:
+				if(temp_set<90)
+					temp_set+=10;
+				else temp_set=0;
+				break;
+			case 3:
+				if(temp_set<99)
+					temp_set+=1;
+				else temp_set=0;
+				break;
+			case 4:
+				temp_set=0;
+				break;
+		}	key_what=0;
+		Display_show_temp_limit(temp_set);
+		break;}
 	}
+}
+void Temp_Buzzer(void){
+	static bit is_buzzing=0;
+	if(temperature>temp_limit*100){
+		if(is_buzzing==0){
+			Set_Buzz(); is_buzzing=1;}}
+		else if(temperature<=(temp_limit*100-10)){
+			if(is_buzzing){
+			Off_Buzz(); is_buzzing=0;}}
 }
 void System_Match(){//------模式匹配--------
 	switch (System_mode)
@@ -355,16 +430,20 @@ void main(){
 	Timer0_Init();
 	Uart1_Init();
 	SendString("Welcome to mutilfunction system!");
+	Temp_limit_Init();
 	while(1){
 		if(flag_10ms){
 			flag_10ms=0;
 			Keep_loop();
 			Time_Calc();
+			//温度读取
 			ms_10++;
 			if(ms_10>=80){
 			ms_10=0;
 			temperature=Read_DS18B20_temp();
-		}	Cort_connect();
+		}	//
+			Temp_Buzzer();
+			Cort_connect();
 			System_Match();
 		}
 	}
