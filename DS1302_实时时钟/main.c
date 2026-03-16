@@ -441,6 +441,9 @@ void main(){
 			if(ms_10>=80){
 			ms_10=0;
 			temperature=Read_DS18B20_temp();
+			if(temperature == 8500){
+			     temperature = 2500;
+			    }
 		}	//
 			Temp_Buzzer();
 			Cort_connect();
