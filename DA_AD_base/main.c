@@ -37,23 +37,31 @@ void Relay(unsigned char addr,bit flag){
 }
 void Nixie_scan(void){
 	static unsigned char pos=0;
-	P0=0xFF; P2=0xE0; P2=0x00;
-	P0=0x01<<pos; P2=0xC0; P2=0x00;
+	// 消影
+	P0=0xFF; 
+	P2=(P2&0x1F)|0xE0; P2&=0x1F; 
+	
+	// 位选
+	P0=0x01<<pos; 
+	P2=(P2&0x1F)|0xC0; P2&=0x1F; 
+	
+	// 段选
 	P0=smg_code[show_buf[pos]];
-	P2=0xE0; P2=0x00;
+	P2=(P2&0x1F)|0xE0; P2&=0x1F; 
+	
 	pos++;
 	if(pos>7){pos=0;}
 }
 void Display_sun(void){
 	unsigned char dat=0;
 	unsigned char dat2=0;
-	dat2=Ad_Read(0x41);
-	dat=Ad_Read(0x43);
+	dat=Ad_Read(0x41);
+	dat2=Ad_Read(0x43);
 	show_buf[0]=dat/100%10; show_buf[1]=dat/10%10;
 	show_buf[2]=dat%10;
-	show_buf[3]=12;  show_buf[3]=12;
-	show_buf[0]=dat2/100%10; show_buf[1]=dat2/10%10;
-	show_buf[2]=dat2%10;	
+	show_buf[3]=12;  show_buf[4]=12;
+	show_buf[5]=dat2/100%10; show_buf[6]=dat2/10%10;
+	show_buf[7]=dat2%10;	
 }
 void Timer0_Isr(void) interrupt 1
 {
@@ -63,17 +71,20 @@ void Timer0_Isr(void) interrupt 1
 		tick_1ms=0;
 		flag_10ms=1;}
 }
-void Timer0_Init(void)		//1毫秒@11.0592MHz
+void Timer0_Init(void)		//1毫秒@12.000MHz
 {
 	AUXR |= 0x80;			//定时器时钟1T模式
 	TMOD &= 0xF0;			//设置定时器模式
-	TL0 = 0xCD;				//设置定时初始值
-	TH0 = 0xD4;				//设置定时初始值
+	TL0 = 0x20;				//设置定时初始值
+	TH0 = 0xD1;				//设置定时初始值
 	TF0 = 0;				//清除TF0标志
 	TR0 = 1;				//定时器0开始计时
 	ET0 = 1;				//使能定时器0中断
 	EA=1;
 }
+
+
+
 void Read_sun(void){
 	switch (System_mode)
 	{
@@ -89,7 +100,7 @@ void Read_sun(void){
 		Seg_led(is,1);
 		is++;
 		if(is>7){is=0;  count++; 
-			if(count==4){System_mode=1; count=0; Seg_led(7,0);}}
+			if(count==2){System_mode=1; count=0; Seg_led(7,0);}}
 		break;}
 	case 1:
 		Display_sun();
@@ -104,7 +115,6 @@ void main(){
 	if(flag_10ms){
 		flag_10ms=0;
 		Read_sun();
-		
 		}
 }
 }

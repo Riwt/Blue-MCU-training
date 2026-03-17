@@ -110,15 +110,19 @@ void I2CSendAck(unsigned char ackbit)
 
 unsigned char Ad_Read(unsigned char addr){
 	unsigned char temp;
+	
 	I2CStart();
 	I2CSendByte(0x90);
 	I2CWaitAck();
 	I2CSendByte(addr);
 	I2CWaitAck();
-	
 	I2CStart();
 	I2CSendByte(0x91);
 	I2CWaitAck();
+
+	I2CReceiveByte();
+	I2CSendAck(0);
+	
 	temp=I2CReceiveByte();
 	I2CSendAck(1);
 	I2CStop();

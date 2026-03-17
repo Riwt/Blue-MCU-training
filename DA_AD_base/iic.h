@@ -1,7 +1,6 @@
 #ifndef __IIC_H
 #define __IIC_H
 
-static void I2C_Delay(unsigned char n);
 void I2CStart(void);
 void I2CStop(void);
 void I2CSendByte(unsigned char byt);
