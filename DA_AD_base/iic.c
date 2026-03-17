@@ -3,9 +3,9 @@
 	2. 	参赛选手可以自行编写相关代码或以该代码为基础，根据所选单片机类型、运行速度和试题
 		中对单片机时钟频率的要求，进行代码调试和修改。
 */
-
-#define DELAY_TIME	10
 #include <STC15F2K60S2.H>
+#define DELAY_TIME	10
+
 sbit scl=P2^0;
 sbit sda=P2^1;
 //
@@ -108,24 +108,35 @@ void I2CSendAck(unsigned char ackbit)
 	I2C_Delay(DELAY_TIME);
 }
 
-void Write_EEPROM(unsigned char word_addr,unsigned char dat){
-    I2Cstart();
-    I2CSendByte(0xA0);
-    I2CWaitAck();
-    I2CSendByte(word_addr);
-    I2CWaitAck();
-    I2CSendByte(dat);
-    I2CWaitAck();
-    I2CStop();
+unsigned char Ad_Read(unsigned char addr){
+	unsigned char temp;
+	
+	I2CStart();
+	I2CSendByte(0x90);
+	I2CWaitAck();
+	I2CSendByte(addr);
+	I2CWaitAck();
+	I2CStart();
+	I2CSendByte(0x91);
+	I2CWaitAck();
+
+	I2CReceiveByte();
+	I2CSendAck(0);
+	
+	temp=I2CReceiveByte();
+	I2CSendAck(1);
+	I2CStop();
+	return temp;
 }
 
-unsigned char Read_EEPROM(unsigned char word_addr){
-    unsigned char dat=0;
-    I2CStart();
-    I2CSendByte(0xA0);
-    I2CWaitAck();
-    I2CSendByte(word_addr);
-    I2CWaitAck();
-
-    
+void Da_Write(unsigned char addr){
+	I2CStart();
+	I2CSendByte(0x90);
+	I2CWaitAck();
+	I2CSendByte(0x41);
+	I2CWaitAck();
+	I2CSendByte(addr);
+	I2CWaitAck();
+	I2CStop();
 }
+

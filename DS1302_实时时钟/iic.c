@@ -3,11 +3,10 @@
 	2. 	参赛选手可以自行编写相关代码或以该代码为基础，根据所选单片机类型、运行速度和试题
 		中对单片机时钟频率的要求，进行代码调试和修改。
 */
-
-#define DELAY_TIME	10
 #include <STC15F2K60S2.H>
-sbit scl=P2^0;
+#define DELAY_TIME	10
 sbit sda=P2^1;
+sbit scl=P2^0;
 //
 static void I2C_Delay(unsigned char n)
 {
@@ -109,7 +108,7 @@ void I2CSendAck(unsigned char ackbit)
 }
 
 void Write_EEPROM(unsigned char word_addr,unsigned char dat){
-    I2Cstart();
+    I2CStart();
     I2CSendByte(0xA0);
     I2CWaitAck();
     I2CSendByte(word_addr);
@@ -127,5 +126,24 @@ unsigned char Read_EEPROM(unsigned char word_addr){
     I2CSendByte(word_addr);
     I2CWaitAck();
 
-    
+    I2CStart();
+    I2CSendByte(0xA1);
+    I2CWaitAck();
+    dat=I2CReceiveByte();
+    I2CSendAck(1);
+    I2CStop();
+	
+	return dat;
+}
+
+void Delay5ms(void)	//@11.0592MHz
+{
+	unsigned char data i, j;
+
+	i = 54;
+	j = 199;
+	do
+	{
+		while (--j);
+	} while (--i);
 }

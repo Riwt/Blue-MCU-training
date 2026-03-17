@@ -5,6 +5,8 @@
 */
 #include <STC15F2K60S2.H>
 #include <intrins.h>
+#include "onewire.h"
+
 sbit DQ=P1^4;
 //
 void Delay_OneWire(unsigned int t)  
@@ -69,3 +71,35 @@ bit init_ds18b20(void)
   	return initflag;
 }
 
+unsigned int Read_DS18B20_temp(void){
+    unsigned char LSB,MSB;
+    signed int raw;
+    unsigned int temp;
+	//		static unsigned char is_read=0;
+	//		if(is_read==0){
+	//		is_read=1;
+	//		EA=0;
+	//    if(init_ds18b20()){ EA=1; is_neg=0; return 0; }
+			init_ds18b20();
+		Write_DS18B20(0xCC);
+		Write_DS18B20(0xBE);
+		LSB = Read_DS18B20();
+		MSB = Read_DS18B20();
+	//    EA=1;
+	//}
+	//		else if(is_read){
+	//		is_read=0;
+	//    EA=0;
+	//    if(init_ds18b20()){ EA=1; is_neg=0; return 0; }
+			init_ds18b20();
+		Write_DS18B20(0xCC);
+		Write_DS18B20(0x44);
+	//    EA=1;
+	//}
+    raw = (signed int)((MSB<<8)|LSB);
+   if(raw < 0){ is_neg=1; raw=-raw; }
+    else       { is_neg=0; }
+
+    temp = (unsigned int)(raw * 625L / 100);
+    return temp;
+}
