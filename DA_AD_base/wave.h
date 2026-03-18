@@ -4,5 +4,6 @@
 unsigned char Wave_Read(void);
 void Wave_Init(void);
 void Delay12us(void);
+unsigned char Wave_Read(void);
 
 #endif

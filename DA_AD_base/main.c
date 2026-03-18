@@ -1,7 +1,10 @@
 #include <STC15F2K60S2.H>
 #include "iic.h"
+#include "wave.h"
 
 unsigned char System_mode=0;
+unsigned int Wave_Date;
+
 volatile unsigned char tick_1ms=0;
 volatile bit flag_10ms=0;
 unsigned char smg_code[13]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF,0x00,0xBF};
@@ -10,6 +13,13 @@ unsigned char show_buf[8]={10,10,10,10,10,10,10,10};
 void System_Init(void){
 	P2=0xA0; P0=0x00; P2=0x00;
 	P2=0x80; P0=0xFF; P2=0x00;
+}
+void Seg_Proc(){
+	
+	Wave_Date=Wave_Read();
+	show_buf[0]=Wave_Date/100%10;
+	show_buf[1]=Wave_Date/10%10;
+	show_buf[2]=Wave_Date%10;
 }
 void Seg_led(unsigned char addr,bit can){
 	static unsigned char temp=0x00;
@@ -100,11 +110,15 @@ void Read_sun(void){
 		Seg_led(is,1);
 		is++;
 		if(is>7){is=0;  count++; 
-			if(count==2){System_mode=1; count=0; Seg_led(7,0);}}
+			if(count==1){System_mode=1; count=0; Seg_led(7,0);}}
 		break;}
-	case 1:
-		Display_sun();
-		break;
+	case 1:{
+		//Display_sun();
+		static unsigned char ms_10=0;
+		if(ms_10<50){ms_10++; return ;}
+		ms_10=0;
+		Seg_Proc();
+		break;}
 	}
 }
 void main(){
