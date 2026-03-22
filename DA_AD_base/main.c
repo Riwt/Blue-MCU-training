@@ -10,9 +10,61 @@ volatile bit flag_10ms=0;
 unsigned char smg_code[13]={0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF,0x00,0xBF};
 unsigned char show_buf[8]={10,10,10,10,10,10,10,10};
 
+sbit S4=P3^3;
+sbit S5=P3^2;
+sbit S6=P3^1;
+sbit S7=P3^0;
+
+unsigned char btn_what=0;
+
 void System_Init(void){
 	P2=0xA0; P0=0x00; P2=0x00;
 	P2=0x80; P0=0xFF; P2=0x00;
+}
+
+void Set_led(unsigned char s){
+	EA=0;
+	P2=0x80; P0=s; P2=0x00;
+	EA=1;
+}
+
+void LED_Reset(void){
+	unsigned char i;
+	for(i=0;i<8;i++){
+		show_buf[i]=10;
+	}
+	// 使用Set_led关闭所有LED
+	Set_led(0xFF);
+}
+
+unsigned char Btn_Read(void){
+	P44=0;
+	if(S4==0){ P44=1; return 4;}
+	if(S5==0){ P44=1; return 5;}
+	if(S6==0){ P44=1; return 6;}
+	if(S7==0){ P44=1; return 7;}
+	return 0;
+}
+
+void Btn_loop(void){
+	unsigned char btn_val=0;
+	static unsigned char btn_state=0;
+	btn_val=Btn_Read();
+	switch(btn_state){
+		case 0:
+			if(btn_val!=0){ btn_state=1;}
+			break;
+		case 1:
+			if(btn_val!=0){
+				btn_what=btn_val;
+				btn_state=2;
+			}else btn_state=0;
+			break;
+		case 2:
+			if(btn_val==0)
+				btn_state=0;
+			break;
+	}
 }
 void Seg_Proc(){
 	
@@ -23,14 +75,23 @@ void Seg_Proc(){
 }
 void Seg_led(unsigned char addr,bit can){
 	static unsigned char temp=0x00;
+
 	if(can)
 		temp=temp|0x01<<addr;
 	else temp=temp&(~(0x01<<addr));
+
 	EA=0;
 	P0=~temp;
 	P2=P2&0x1F|0x80;
 	P2&=0x1F;
 	EA=1;
+}
+
+void Seg_led_Reset(void){
+	unsigned char i;
+	for(i=0;i<8;i++){
+		Seg_led(i,0);
+	}
 }
 void Relay(unsigned char addr,bit flag){
 	static unsigned char temp=0x00;
@@ -48,17 +109,17 @@ void Relay(unsigned char addr,bit flag){
 void Nixie_scan(void){
 	static unsigned char pos=0;
 	// 消影
-	P0=0xFF; 
-	P2=(P2&0x1F)|0xE0; P2&=0x1F; 
-	
+	P0=0xFF;
+	P2=(P2&0x1F)|0xE0; P2&=0x1F;
+
 	// 位选
-	P0=0x01<<pos; 
-	P2=(P2&0x1F)|0xC0; P2&=0x1F; 
-	
+	P0=0x01<<pos;
+	P2=(P2&0x1F)|0xC0; P2&=0x1F;
+
 	// 段选
 	P0=smg_code[show_buf[pos]];
-	P2=(P2&0x1F)|0xE0; P2&=0x1F; 
-	
+	P2=(P2&0x1F)|0xE0; P2&=0x1F;
+
 	pos++;
 	if(pos>7){pos=0;}
 }
@@ -75,7 +136,10 @@ void Display_sun(void){
 }
 void Timer0_Isr(void) interrupt 1
 {
-	Nixie_scan();
+	// 如果在流水灯模式，不扫描数码管，避免覆盖LED状态
+	if(System_mode!=0){
+		Nixie_scan();
+	}
 	tick_1ms++;
 	if(tick_1ms>=10){
 		tick_1ms=0;
@@ -96,39 +160,99 @@ void Timer0_Init(void)		//1毫秒@12.000MHz
 
 
 void Read_sun(void){
+	static unsigned char last_mode=0;
+
+	if(System_mode!=last_mode){
+		last_mode=System_mode;
+	}
+
 	switch (System_mode)
 	{
-	case 0:{//失败的流水灯，不管了╰（‵□′）╯ ————
+		case 0:{//流水灯模式
 		static unsigned char ms_10=0;
-		//static bit is_light=1;
 		static unsigned char count=0;
 		static unsigned char is=0;
-		if(ms_10<20){ms_10++; return ;}
+		static bit initialized=0;
+
+		if(last_mode!=0){
+			initialized=0;
+		}
+
+		if(!initialized){
+			initialized=1;
+			is=0;
+			count=0;
+			// 初始化时直接设置P2
+			P2=0x80;
+		}
+
+		if(ms_10<10){ms_10++; return ;}
 		ms_10=0;
-		if(is==0){ Seg_led(7,0);} else
-		Seg_led(is-1,0);
-		Seg_led(is,1);
+
+		// 简单的LED控制，参考其他项目
+		P0=~(0x01<<is);
+
 		is++;
-		if(is>7){is=0;  count++; 
-			if(count==1){System_mode=1; count=0; Seg_led(7,0);}}
+		if(is>7){
+			is=0;
+			count++;
+			if(count>=3){
+				System_mode=1;
+				count=0;
+			}
+		}
 		break;}
-	case 1:{
-		//Display_sun();
+	case 1:{//超声波模式
 		static unsigned char ms_10=0;
+		static bit initialized=0;
+
+		if(last_mode!=1){
+			initialized=0;
+		}
+
+		if(!initialized){
+			initialized=1;
+		}
+
 		if(ms_10<50){ms_10++; return ;}
 		ms_10=0;
 		Seg_Proc();
+		break;}
+	case 2:{//光敏电阻模式
+		static unsigned char ms_10=0;
+		static bit initialized=0;
+
+		if(last_mode!=2){
+			initialized=0;
+		}
+
+		if(!initialized){
+			initialized=1;
+		}
+
+		if(ms_10<50){ms_10++; return ;}
+		ms_10=0;
+		Display_sun();
 		break;}
 	}
 }
 void main(){
 	System_Init();
 	Timer0_Init();
-	//Seg_led(0,1);
+
 	while(1){
-	if(flag_10ms){
-		flag_10ms=0;
-		Read_sun();
+		if(flag_10ms){
+			flag_10ms=0;
+			Btn_loop();
+			if(btn_what==4){
+				System_mode++;
+				if(System_mode>2){
+					System_mode=0;
+				}
+				LED_Reset();
+				btn_what=0;
+			}
+			Read_sun();
 		}
-}
+	}
 }

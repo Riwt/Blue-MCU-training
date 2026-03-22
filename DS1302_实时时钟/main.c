@@ -247,11 +247,11 @@ void Read_Ds1302_Time(void){
 	EA=1;
 }
 void Time_Read(void){//-----mode1--时间读取-----串口-------看一下这个，你可能会忘-----
-	SendByte((hour/10<<4)|(hour%10));
+	SendByte((hour/10<<4)|(hour%10));//以BCD码传递
 	SendByte((min/10<<4)|(min%10));
 	SendByte((sec/10<<4)|(sec%10));
 }
-void Send_temp(void){
+void Send_temp(void){//以字符传递
 	if(is_neg) SendByte('-');
 	else SendByte('+');
 	SendByte(temperature/1000+'0');
