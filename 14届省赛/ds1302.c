@@ -75,7 +75,6 @@ void Read_DS1302_time(){
 }
 
 void Display_show_time(){
-	Read_DS1302_time();
 	show_buf[7]=Time_read[0]%16; show_buf[6]=Time_read[0]/16;
 	show_buf[5]=12;
 	show_buf[4]=Time_read[1]%16; show_buf[3]=Time_read[1]/16;

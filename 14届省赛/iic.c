@@ -108,7 +108,7 @@ void I2CSendAck(unsigned char ackbit)
 	I2C_Delay(DELAY_TIME);
 }
 
-unsigned char Ad_Read(unsigned char addr){
+unsigned char Da_Read(unsigned char addr){
 	unsigned char temp;
 	
 	I2CStart();
@@ -119,17 +119,13 @@ unsigned char Ad_Read(unsigned char addr){
 	I2CStart();
 	I2CSendByte(0x91);
 	I2CWaitAck();
-
-	I2CReceiveByte();
-	I2CSendAck(0);
-	
 	temp=I2CReceiveByte();
 	I2CSendAck(1);
 	I2CStop();
 	return temp;
 }
 
-void Da_Write(unsigned char dat){
+void Ad_Write(unsigned char dat){
 	I2CStart();
 	I2CSendByte(0x90);
 	I2CWaitAck();
@@ -139,4 +135,3 @@ void Da_Write(unsigned char dat){
 	I2CWaitAck();
 	I2CStop();
 }
-
