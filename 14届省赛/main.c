@@ -6,6 +6,13 @@
 sbit c1=P4^4;
 sbit c2=P4^2;
 
+#define LED_OFF 0xFF
+#define LED_MODE0 0xFE
+#define LED_MODE1 0xFD
+#define LED_MODE2 0xFB
+#define LED_ACQUIRE_INVALID 0xF7
+#define LED_WARN_DEFAULT 0xEF
+
 unsigned char System_mode=0;
 unsigned char Recall_mode=0;//System_mode1中回显模式-0温度-1湿度-2时间----
 volatile unsigned int NE555_hz=0;//在中断timer 3中赋值
@@ -125,17 +132,24 @@ void State_Proc(void){//-------修改s4--------
 	}
 }
 void Warn_led(){
+	unsigned char led_on=LED_WARN_DEFAULT;
 	if(!acquire_effect){
-		Set_led(0xF7);
+		Set_led(LED_ACQUIRE_INVALID);
 		}else if(is_over){
 			static unsigned char ms_10=0;
 			static bit is_sun=0;
+			switch(System_mode){
+				case 0: led_on=LED_MODE0; break;
+				case 1: led_on=LED_MODE1; break;
+				case 2: led_on=LED_MODE2; break;
+				default: led_on=LED_WARN_DEFAULT; break;
+			}
 			if(ms_10<10){ms_10++; return ;}
 			ms_10=0;
 			if(is_sun){
-			Set_led(0xEF); is_sun=0;}
+			Set_led(led_on); is_sun=0;}
 			else{
-			Set_led(0xFF); is_sun=1;}
+			Set_led(LED_OFF); is_sun=1;}
 			}
 }
 void Display_temp_show(){
@@ -255,14 +269,15 @@ void System_Match(){//------改界面---显示层面----
 {
 	case 0://s4
 		Read_DS1302_time();
-		Set_led(0xFE);
+		Set_led(LED_MODE0);
 		Display_show_time();
 		break;
 	case 1:
-		Set_led(0xFD);
+		Set_led(LED_MODE1);
 		Recall_state();
 		break;
 	case 2:
+		Set_led(LED_MODE2);
 		show_buf[0]=16; show_buf[1]=10;
 		show_buf[2]=10; show_buf[3]=10;
 		show_buf[4]=10; show_buf[5]=10;
@@ -287,6 +302,7 @@ void main(){
 			Keep_Loop();//已经加3s屏蔽
 			State_Proc();//s4
 			System_Match();
+			Warn_led();
 			}
 		}
 	}
