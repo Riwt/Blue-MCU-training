@@ -10,7 +10,7 @@ void Delay_OneWire(unsigned int t)
 {
 	unsigned char i;
 	while(t--){
-		for(i=0;i<120;i++);
+		for(i=0;i<12;i++);
 	}
 }
 
@@ -21,6 +21,7 @@ void Write_DS18B20(unsigned char dat)
 	for(i=0;i<8;i++)
 	{
 		DQ = 0;
+		_nop_();_nop_();_nop_();_nop_();
 		DQ = dat&0x01;
 		Delay_OneWire(5);
 		DQ = 1;
@@ -40,6 +41,7 @@ unsigned char Read_DS18B20(void)
 		DQ = 0;
 		dat >>= 1;
 		DQ = 1;
+		_nop_();_nop_();_nop_();_nop_();
 		if(DQ)
 		{
 			dat |= 0x80;
@@ -53,7 +55,6 @@ unsigned char Read_DS18B20(void)
 bit init_ds18b20(void)
 {
   	bit initflag = 0;
-  	
   	DQ = 1;
   	Delay_OneWire(12);
   	DQ = 0;
@@ -68,7 +69,7 @@ bit init_ds18b20(void)
 
 unsigned int Read_temp(){
 	unsigned char LSB,MSB;
-	signed char raw;
+	signed int raw;
 	unsigned int temp;
 	
 	init_ds18b20();
@@ -82,6 +83,6 @@ unsigned int Read_temp(){
 	Write_DS18B20(0x44);
 	
 	raw=(signed int)((MSB<<8)|LSB);//如果需要负数从这改
-	temp=(unsigned int)(raw*625/100);
+	temp=(unsigned int)(raw*625L/1000);
 	return temp;
 }

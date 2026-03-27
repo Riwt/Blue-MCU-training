@@ -14,7 +14,7 @@ void Timer1_Isr(void) interrupt 3
 		tick_1ms=0;
 		flag_10ms=1;
 	}
-	count_f++;
+	count_f++;//80/1800*NE555_hz+10=limp
 	if(count_f>=1000){
 		count_f=0;
 		TR0=0;
