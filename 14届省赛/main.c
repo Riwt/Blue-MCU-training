@@ -125,15 +125,22 @@ void State_Proc(void){//-------修改s4--------
 	}
 }
 void Warn_led(){
+	unsigned char led_on=0xEF;
 	if(!acquire_effect){
 		Set_led(0xF7);
 		}else if(is_over){
 			static unsigned char ms_10=0;
 			static bit is_sun=0;
+			switch(System_mode){
+				case 0: led_on=0xFE; break;
+				case 1: led_on=0xFD; break;
+				case 2: led_on=0xFB; break;
+				default: led_on=0xEF; break;
+			}
 			if(ms_10<10){ms_10++; return ;}
 			ms_10=0;
 			if(is_sun){
-			Set_led(0xEF); is_sun=0;}
+			Set_led(led_on); is_sun=0;}
 			else{
 			Set_led(0xFF); is_sun=1;}
 			}
@@ -263,6 +270,7 @@ void System_Match(){//------改界面---显示层面----
 		Recall_state();
 		break;
 	case 2:
+		Set_led(0xFB);
 		show_buf[0]=16; show_buf[1]=10;
 		show_buf[2]=10; show_buf[3]=10;
 		show_buf[4]=10; show_buf[5]=10;
@@ -287,6 +295,7 @@ void main(){
 			Keep_Loop();//已经加3s屏蔽
 			State_Proc();//s4
 			System_Match();
+			Warn_led();
 			}
 		}
 	}
