@@ -14,7 +14,7 @@ unsigned int temperature=30;
 unsigned char current_light=1;//当前光线状态0亮
 unsigned char last_light=1;//上次光线
 unsigned char is_locked=0;
-bit acquire_effect=0;//采集是否有效
+bit acquire_effect=1;//采集是否有效
 bit is_over=0;
 
 unsigned int valid_trigger_count=0;//有效触发次数
@@ -34,10 +34,16 @@ unsigned char Time_read[7]={0x55,0x59,0x23,0x00,0x00,0x00,0x00};
 unsigned char Write_ds1302_addr[7]={0x80,0x82,0x84,0x86,0x88,0x8A,0x8C};
 unsigned char Read_ds1302_addr[7]={0x81,0x83,0x85,0x87,0x89,0x8B,0x8D};
 
-void Set_led(unsigned char s){
+void Seg_led(unsigned char s,bit lit){
+	static unsigned char pos=0x00;
+	if(lit)
+	pos=pos|0x01<<s;
+	else
+	pos=pos&(~(0x01<<s));
 	EA=0;
 	P2=(P2&0x1F)|0x80;
-	P0=s; P2&=0x1F;
+	P0=~pos;
+	P2&=0x1F;
 	EA=1;
 }
 void Delete_show(){
@@ -107,35 +113,18 @@ void Keep_Loop(){
 		break;}
 	}
 }
-void State_Proc(void){//-------修改s4--------
-	if(key_what==4){
-		switch (System_mode)
-	{
-	case 0:
-		System_mode=1; Set_led(0xFF);
-		Recall_mode=0; Delete_show();
-		break;
-	case 1:
-		System_mode=2; Delete_show(); Set_led(0xFF);
-		break;
-	case 2:
-		System_mode=0; Delete_show(); Set_led(0xFF);
-		break;
-	}	key_what=0;
-	}
-}
 void Warn_led(){
 	if(!acquire_effect){
-		Set_led(0xF7);
+		Seg_led(4,1);
 		}else if(is_over){
 			static unsigned char ms_10=0;
 			static bit is_sun=0;
 			if(ms_10<10){ms_10++; return ;}
 			ms_10=0;
 			if(is_sun){
-			Set_led(0xEF); is_sun=0;}
+			Seg_led(3,1); is_sun=0;}
 			else{
-			Set_led(0xFF); is_sun=1;}
+			Seg_led(3,0); is_sun=1;}
 			}
 }
 void Display_temp_show(){
@@ -180,6 +169,7 @@ void Display_limp_temp(unsigned int temp,unsigned char limp){
 	show_buf[4]=temp/10%10; show_buf[5]=12;
 	if(NE555_hz<20||NE555_hz>2000){
 	show_buf[6]=18; show_buf[7]=18;
+	acquire_effect=0;
 	}else{
 	show_buf[6]=limp/10%10; show_buf[7]=limp%10;
 	acquire_effect=1;
@@ -198,27 +188,43 @@ void Date_light_abtain(){
 		current_light=0;
 	}
 	if(last_light==0&&current_light==1&&is_locked==0){
-		is_locked=1; Set_led(0xDF);
+		is_locked=1; Seg_led(2,1); Seg_led(4,0); Seg_led(1,0); Seg_led(0,0);
 		temp_val=temperature;
 		limp_val=(8*NE555_hz/180+10);//湿度，记得补
 //判断是否有效，有效次数，温度等计算	
 		Display_limp_temp(temp_val,limp_val);
 		if(acquire_effect){
-			acquire_effect=0;
 			valid_trigger_count++;
 			temp_sum+=temp_val;
 			limp_sum+=limp_val*10;
 			if(temp_val>temp_max) temp_max=temp_val;
 			if(limp_val>limp_max) limp_max=limp_val;
-			if(temp_val>temp_set){is_over=1;}else is_over=0;
+			if(temp_val/10>temp_set){is_over=1;}else is_over=0; Seg_led(3,0);
 		}
 	}
 	if(is_locked){
-		if(ms_10>=300){ ms_10=0; is_locked=0; Set_led(0xFF);}
+		if(ms_10>=300){ ms_10=0; is_locked=0; Seg_led(2,0);}
 		else
 		ms_10++;
 	}
 	last_light=current_light;
+}
+void State_Proc(void){//-------修改s4--------
+	if(key_what==4){
+		switch (System_mode)
+	{
+	case 0:
+		System_mode=1; Seg_led(0,0); 
+		Recall_mode=0; Delete_show();
+		break;
+	case 1:
+		System_mode=2; Delete_show(); Seg_led(1,0);
+		break; 
+	case 2:
+		System_mode=0; Delete_show(); 
+		break; 
+	}	key_what=0;
+	}
 }
 void Recall_state(){
 	if(key_what==5){
@@ -254,13 +260,12 @@ void System_Match(){//------改界面---显示层面----
 	switch (System_mode)
 {
 	case 0://s4
+		Seg_led(0,1);
 		Read_DS1302_time();
-		Set_led(0xFE);
 		Display_show_time();
 		break;
 	case 1:
-		Set_led(0xFD);
-		Recall_state();
+		Recall_state(); Seg_led(1,1);
 		break;
 	case 2:
 		show_buf[0]=16; show_buf[1]=10;
