@@ -156,18 +156,24 @@ void Display_limp_show(){
 		}
 }
 void Display_return_time(){
+	if(valid_trigger_count){
 	show_buf[7]=Time_read[1]%16; show_buf[6]=Time_read[1]/16;
 	show_buf[5]=12;
 	show_buf[4]=Time_read[2]%16; show_buf[3]=Time_read[2]/16;
 	show_buf[2]=valid_trigger_count%10; show_buf[1]=valid_trigger_count/10;
 	show_buf[0]=15;
+	}else{
+	show_buf[0]=15; show_buf[1]=0; show_buf[2]=0;
+	show_buf[3]=10; show_buf[4]=10; show_buf[5]=10;
+	show_buf[6]=10; show_buf[7]=10; 
+	}
 }
 void Display_limp_temp(unsigned int temp,unsigned char limp){
 //-------分类更新-------
 	show_buf[0]=17; show_buf[1]=10;
 	show_buf[2]=10; show_buf[3]=temp/100%10;
 	show_buf[4]=temp/10%10; show_buf[5]=12;
-	if(NE555_hz<20||NE555_hz>2000){
+	if(NE555_hz<200||NE555_hz>2000){
 	show_buf[6]=18; show_buf[7]=18;
 	acquire_effect=0;
 	}else{
@@ -190,7 +196,7 @@ void Date_light_abtain(){
 	if(last_light==0&&current_light==1&&is_locked==0){
 		is_locked=1; Seg_led(2,1); Seg_led(4,0); Seg_led(1,0); Seg_led(0,0);
 		temp_val=temperature;
-		limp_val=(8*NE555_hz/180+10);//湿度，记得补
+		limp_val=(8*(NE555_hz-200)/180+10);//湿度，记得补
 //判断是否有效，有效次数，温度等计算	
 		Display_limp_temp(temp_val,limp_val);
 		if(acquire_effect){
@@ -230,6 +236,9 @@ void Recall_state(){
 	if(key_what==5){
 		key_what=0;
 		Recall_mode++;
+		if(Recall_mode==2){
+			Read_DS1302_time();
+		}
 		if(Recall_mode>2){
 			Recall_mode=0;
 		}
@@ -251,7 +260,6 @@ void Recall_state(){
 		limp_sum=0;
 		key_what=0;
 	}
-		Read_DS1302_time();
 		Display_return_time();
 		break;
 	}
