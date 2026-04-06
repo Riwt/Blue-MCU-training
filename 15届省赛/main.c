@@ -52,6 +52,7 @@ void Timer1_Init(void)		//1毫秒@12.000MHz
 void Timer1_Isr(void) interrupt 3
 {
 	static unsigned int count_f=0;
+	unsigned int temp=0;
 	Nixie_scan();
 	tick_1ms++;
 	if(tick_1ms>10){
@@ -59,12 +60,13 @@ void Timer1_Isr(void) interrupt 3
 	flag_10ms=1;
 	}
 	count_f++;
-	if(count_f>=200){
+	if(count_f>=100){
 		TR0=0;
 		count_f=0;
-		NE555_hz=((TH0<<8)|TL0)*5;
+		temp=(TH0<<8)|TL0;
 		TL0=0; TH0=0;
 		TR0=1;
+		NE555_hz=temp*10;
 	}
 }
 void Seg_led(unsigned char s,bit sun){
@@ -201,7 +203,7 @@ void DAC_control(){
 	if(NE_reject<=500){
 		dat=100;
 	}else if(NE_reject<NE_over){
-		dat=(NE_reject-500)*400/(NE_over-500)+100;
+		dat=(unsigned int)((unsigned long)((NE_reject-500)*400UL)/(NE_over-500)+100);
 	}else{
 		dat=500;
 	}
@@ -214,16 +216,17 @@ void Control_led(){
 	static unsigned char ms_10=0;
 	static bit is_light=0;
 	static bit is_sun=0;
-	ms_10++;
-	if(ms_10<20){return ;}
-	ms_10=0;
 	if(NE_reject<0){
 		Seg_led(1,1);
 	}else if(NE_reject<=NE_over){ Seg_led(1,0);}
+	
+	ms_10++;
+	if(ms_10<20){return ;}
+	ms_10=0;
 	if(NE_reject>NE_over){
 		 is_light=!is_light;
 		 Seg_led(1,is_light);
-	}else{ is_light=0; Seg_led(1,0);}
+	}else{ is_light=0;if(NE_reject>0) Seg_led(1,0);}
 	if(System_mode==0){
 		 is_sun=!is_sun;
 		 Seg_led(0,is_sun);

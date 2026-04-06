@@ -112,7 +112,7 @@ void Ad_Write(unsigned int dat){
 	I2CStart();
 	I2CSendByte(0x90);
 	I2CWaitAck();
-	I2CSendByte(0x41);
+	I2CSendByte(0x40);
 	I2CWaitAck();
 	I2CSendByte(dat);
 	I2CWaitAck();
