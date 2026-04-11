@@ -238,15 +238,20 @@ void Move_test(){
 	run_state_last=Run_state_now;
 }
 void Control_led_relay(){
+	static unsigned char sun_grade_led=0;
+	static unsigned char Run_state_led=4;
 	static bit is_relay=0;
 	if(	is_run_update==0){
+		sun_grade_led=sun_grade;
+		Run_state_led=Run_state;
+	}
 	if(is_hot==1&&is_close==1){
 		Set_relay(0x10);
 		if(is_relay==0){relay_count++; is_relay=1;}
 	}else{ Set_relay(0x00); is_relay=0;}
 	
 	if(is_close){
-	switch (sun_grade)
+	switch (sun_grade_led)
 {
 	case 1:
 		Seg_led(0,1); Seg_led(1,0);
@@ -267,7 +272,7 @@ void Control_led_relay(){
 }}else{	Seg_led(0,0); Seg_led(1,0);
 		Seg_led(2,0); Seg_led(3,0);}
 
-	switch (Run_state)
+	switch (Run_state_led)
 {	static unsigned char ms_10=0;
 	static bit is_light=0;
 	case 1:
@@ -283,7 +288,6 @@ void Control_led_relay(){
 		Seg_led(7,is_light);
 		is_light=!is_light;
 		break;
-}
 }
 }
 void Proc_control(){
