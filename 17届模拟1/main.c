@@ -2,13 +2,15 @@
 #include "ds1302.h"
 #include "wave.h"
 
-sbit c1=P4^2;
-sbit c2=P3^5;
+sbit c1=P4^4;
+sbit c2=P4^2;
 
 unsigned char System_mode=0;
 unsigned char Refer_mode=1;//A1-A2-A3
 bit is_trigger=0;//触发状态
 bit is_alarm=0;//报警
+bit is_unalarm=0;//闭嘴
+bit is_first=0;
 
 unsigned char key_what=0;//邮箱
 unsigned int space=30;//距离数据，注意类型为int
@@ -162,6 +164,9 @@ void Update_trigger_time(){
 }
 void Trigger_write(){
 	if(space<30){
+		if(is_first==0){
+			return ;
+		}
 		if(is_trigger==0){
 		Time_Read();
 		is_trigger=1;
@@ -176,12 +181,11 @@ void Alarm_buzz(){
 		is_alarm=1;
 	}else{
 		is_alarm=0;
-		
+		is_unalarm=0;
 	}
-	if(is_alarm){Set_buzz(0x40);}else{
+	if(is_alarm&&is_unalarm==0){Set_buzz(0x40);}else{
 	Set_buzz(0x00);}
 }
-
 void Control_led(){
 	if(System_mode==0){
 		Seg_led(0,1);
@@ -195,11 +199,15 @@ void Control_led(){
 }
 void Date_Proc(){
 	static unsigned char ms_10;
+	unsigned int space_val;
 	Time_Read();
 	ms_10++;
 	if(ms_10<80){ return ;}
 	ms_10=0;
-	space=Read_Wave();
+	space_val=Read_Wave();
+	if(is_first==0){
+		is_first=1;
+	}else space=space_val;
 }
 void Proc_mode(){
 	switch (key_what)
@@ -225,7 +233,7 @@ void Proc_mode(){
 		Delete_time();
 		break;
 	case 9:
-		if(is_alarm){ is_alarm=0;}
+		if(is_alarm){ is_unalarm=1;}
 		break;
 }	key_what=0;		
 }
@@ -255,7 +263,7 @@ void main(){
 			Proc_mode();
 			Trigger_write();
 			Control_led();
-			//Alarm_buzz();
+			Alarm_buzz();
 			System_Match();
 		}
 }
